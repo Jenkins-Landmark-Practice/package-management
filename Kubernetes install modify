@@ -1,0 +1,53 @@
+#!/bin/bash
+
+sudo hostnamectl set-hostname Node11
+
+cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+overlay
+br_netfilter
+EOF
+
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+cat <<EOF | sudo tee /etc/sysctl.d/99-kubernetes-cri.conf
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+
+sudo sysctl --system
+
+sudo apt-get update
+
+sudo apt-get install -y containerd
+
+sudo mkdir -p /etc/containerd
+
+sudo containerd config default | sudo tee /etc/containerd/config.toml
+
+sudo systemctl restart containerd
+
+sudo swapoff -a
+
+sudo apt-get update && sudo apt-get install -y apt-transport-https curl
+
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
+deb https://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+
+sudo apt-get update
+
+sudo apt-get install -y kubelet kubeadm kubectl
+
+sudo apt-mark hold kubelet kubeadm kubectl
+
+systemctl daemon-reload
+systemctl start kubelet
+systemctl enable kubelet.service
+
+kubeadm join 10.0.0.46:6443 --token 2scxl2.ojpsyob0gh1ilgj7 \
+        --discovery-token-ca-cert-hash sha256:067001d74c3507a69970d6783eea2ddeedbc026a6ae83d04ff2063582f914ff2
+
